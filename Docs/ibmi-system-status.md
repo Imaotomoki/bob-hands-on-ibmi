@@ -1,0 +1,333 @@
+# IBM i システム状況サービス
+
+このドキュメントは、IBM i のシステム状況とアクティビティに関連するシステムサービスについて説明します。
+
+## SYSTEM_STATUS テーブル関数
+
+SYSTEM_STATUS テーブル関数は、システム状況に関する包括的な情報を返します。
+
+返される情報は、システム状況の処理（WRKSYSSTS）CLコマンドで表示できる情報と類似しています。
+
+**権限:** 不要。
+
+```
+>>-- SYSTEM_STATUS --(
+  RESET_STATISTICS => reset-statistics,
+  DETAILED_INFO => detailed-info
+)-->>
+```
+スキーマは QSYS2 です。
+
+**パラメータ:**
+- `RESET_STATISTICS`: 統計をリセットするかどうか（'YES' または 'NO'）
+- `DETAILED_INFO`: 詳細情報を含めるかどうか（'ALL' または 'BASIC'）
+
+**主要カラム:**
+
+### ジョブ関連
+| カラム名 | データ型 | 説明 |
+| --- | --- | --- |
+| JOBS_SIGNED_ON | INTEGER | 現在システムにサインオンしているジョブの数 |
+| BATCH_RUNNING | INTEGER | 現在実行中のバッチ・ジョブの数 |
+| BATCH_WAITING_TO_RUN | INTEGER | 実行を待機しているバッチ・ジョブの数 |
+| BATCH_HELD_WHILE_RUNNING | INTEGER | 実行開始後に保留されたバッチ・ジョブの数 |
+| BATCH_HELD_ON_JOBQ | INTEGER | 実行開始前に保留されたバッチ・ジョブの数 |
+
+### CPU関連
+| カラム名 | データ型 | 説明 |
+| --- | --- | --- |
+| ELAPSED_TIME | INTEGER | 測定開始時刻からの経過時間（秒） |
+| ELAPSED_CPU_USED | DECIMAL(10,2) | 処理装置が使用中だった経過時間の平均 |
+| CONFIGURED_CPUS | INTEGER | パーティションに構成された CPU の総数 |
+| CURRENT_CPU_CAPACITY | DECIMAL(10,2) | パーティションで使用されている現在の処理容量 |
+
+### メモリー・ストレージ関連
+| カラム名 | データ型 | 説明 |
+| --- | --- | --- |
+| MAIN_STORAGE_SIZE | BIGINT | システム内の主記憶域の量（キロバイト） |
+| SYSTEM_ASP_STORAGE | BIGINT | システム ASP のストレージ容量（百万バイト） |
+| TOTAL_AUXILIARY_STORAGE | BIGINT | システム上の補助記憶域の総量（百万バイト） |
+| SYSTEM_ASP_USED | DECIMAL(10,2) | 現在使用中のシステム ASP の割合 |
+| CURRENT_TEMPORARY_STORAGE | INTEGER | 一時オブジェクトに使用されているストレージ量（百万バイト） |
+
+### 使用例
+
+```sql
+-- システム状況を表示
+SELECT * FROM TABLE(QSYS2.SYSTEM_STATUS());
+
+-- 統計をリセットしてシステム状況を取得
+SELECT * FROM TABLE(QSYS2.SYSTEM_STATUS(RESET_STATISTICS => 'YES'));
+
+-- 基本情報のみを取得（パフォーマンス重視）
+SELECT * FROM TABLE(QSYS2.SYSTEM_STATUS(DETAILED_INFO => 'BASIC'));
+
+-- CPU使用率とメモリー使用率を監視
+SELECT ELAPSED_CPU_USED, 
+       SYSTEM_ASP_USED,
+       CURRENT_TEMPORARY_STORAGE,
+       BATCH_RUNNING,
+       JOBS_SIGNED_ON
+FROM TABLE(QSYS2.SYSTEM_STATUS());
+
+-- ジョブ状況のサマリー
+SELECT 
+  BATCH_RUNNING AS 実行中,
+  BATCH_WAITING_TO_RUN AS 待機中,
+  BATCH_HELD_WHILE_RUNNING AS 実行中保留,
+  BATCH_HELD_ON_JOBQ AS 待ち行列保留,
+  BATCH_MESSAGE_WAIT AS メッセージ待機
+FROM TABLE(QSYS2.SYSTEM_STATUS());
+```
+
+## SYSTEM_STATUS_INFO ビュー
+
+SYSTEM_STATUS_INFO ビューは、SYSTEM_STATUS テーブル関数のビュー版です。詳細情報を含みます。
+
+**権限:** 不要。
+
+### 使用例
+
+```sql
+-- システム状況を表示
+SELECT * FROM QSYS2.SYSTEM_STATUS_INFO;
+
+-- CPU とメモリーの使用状況を監視
+SELECT HOST_NAME,
+       ELAPSED_CPU_USED,
+       SYSTEM_ASP_USED,
+       CURRENT_TEMPORARY_STORAGE,
+       MAXIMUM_TEMPORARY_STORAGE_USED,
+       ACTIVE_JOBS_IN_SYSTEM
+FROM QSYS2.SYSTEM_STATUS_INFO;
+
+-- パーティション情報を表示
+SELECT PARTITION_NAME,
+       PARTITION_ID,
+       CONFIGURED_CPUS,
+       CURRENT_CPU_CAPACITY,
+       DEFINED_MEMORY,
+       MAIN_STORAGE_SIZE / 1024 AS MAIN_STORAGE_MB
+FROM QSYS2.SYSTEM_STATUS_INFO;
+```
+
+## SYSTEM_STATUS_INFO_BASIC ビュー
+
+SYSTEM_STATUS_INFO_BASIC ビューは、システム状況の基本情報を返します。パフォーマンスが重要な場合に使用します。
+
+**権限:** 不要。
+
+### 使用例
+
+```sql
+-- 基本システム状況を表示
+SELECT * FROM QSYS2.SYSTEM_STATUS_INFO_BASIC;
+
+-- 主要メトリクスのみを取得
+SELECT TOTAL_JOBS_IN_SYSTEM,
+       ACTIVE_JOBS_IN_SYSTEM,
+       ELAPSED_CPU_USED,
+       SYSTEM_ASP_USED,
+       CURRENT_TEMPORARY_STORAGE
+FROM QSYS2.SYSTEM_STATUS_INFO_BASIC;
+```
+
+## SYSTEM_ACTIVITY_INFO テーブル関数
+
+SYSTEM_ACTIVITY_INFO テーブル関数は、システム・アクティビティーに関する情報を返します。指定した遅延時間後に経過データを返します。
+
+**権限:** 不要。
+
+**主要カラム:**
+
+| カラム名 | データ型 | 説明 |
+| --- | --- | --- |
+| AVERAGE_CPU_RATE | DECIMAL(20,2) | 平均 CPU レート（パーセント表記）。100% はプロセッサーが公称周波数で実行中 |
+| AVERAGE_CPU_UTILIZATION | DECIMAL(20,2) | すべてのアクティブ・プロセッサーの平均 CPU 使用率 |
+| MINIMUM_CPU_UTILIZATION | DECIMAL(20,2) | 最小の CPU 使用率を報告したプロセッサーの CPU 使用率 |
+| MAXIMUM_CPU_UTILIZATION | DECIMAL(20,2) | 最大の CPU 使用率を報告したプロセッサーの CPU 使用率 |
+
+### 使用例
+
+```sql
+-- CPU アクティビティーを監視
+SELECT * FROM TABLE(QSYS2.SYSTEM_ACTIVITY_INFO(DELAY_SECONDS => 5));
+
+-- CPU 使用率の範囲を確認
+SELECT AVERAGE_CPU_UTILIZATION,
+       MINIMUM_CPU_UTILIZATION,
+       MAXIMUM_CPU_UTILIZATION,
+       MAXIMUM_CPU_UTILIZATION - MINIMUM_CPU_UTILIZATION AS CPU_VARIANCE
+FROM TABLE(QSYS2.SYSTEM_ACTIVITY_INFO(DELAY_SECONDS => 10));
+```
+
+## SYSTEM_VALUE_INFO ビュー
+
+SYSTEM_VALUE_INFO ビューは、システム値に関する情報を返します。
+
+**権限:** 不要。
+
+**主要カラム:**
+
+| カラム名 | データ型 | 説明 |
+| --- | --- | --- |
+| SYSTEM_VALUE_NAME | VARCHAR(10) | システム値の名前 |
+| SYSTEM_VALUE | VARGRAPHIC(3840) | フォーマット済みシステム値 |
+| CURRENT_NUMERIC_VALUE | BIGINT | 数値データの場合の値 |
+| CURRENT_CHARACTER_VALUE | VARGRAPHIC(3840) | 文字データの場合の値 |
+| CATEGORY | VARCHAR(7) | システム値のタイプ（*ALC、*DATTIM、*SEC など） |
+| CHANGEABLE | VARCHAR(3) | CHGSYSVAL コマンドで変更可能か |
+
+### 使用例
+
+```sql
+-- すべてのシステム値を表示
+SELECT * FROM QSYS2.SYSTEM_VALUE_INFO;
+
+-- 特定のシステム値を表示
+SELECT * FROM QSYS2.SYSTEM_VALUE_INFO
+WHERE SYSTEM_VALUE_NAME = 'QCCSID';
+
+-- セキュリティー関連のシステム値を表示
+SELECT SYSTEM_VALUE_NAME, SYSTEM_VALUE, TEXT_DESCRIPTION
+FROM QSYS2.SYSTEM_VALUE_INFO
+WHERE CATEGORY = '*SEC'
+ORDER BY SYSTEM_VALUE_NAME;
+
+-- 変更可能なシステム値を表示
+SELECT SYSTEM_VALUE_NAME, SYSTEM_VALUE, CATEGORY
+FROM QSYS2.SYSTEM_VALUE_INFO
+WHERE CHANGEABLE = 'YES'
+ORDER BY CATEGORY, SYSTEM_VALUE_NAME;
+
+-- 数値システム値を表示
+SELECT SYSTEM_VALUE_NAME, CURRENT_NUMERIC_VALUE, TEXT_DESCRIPTION
+FROM QSYS2.SYSTEM_VALUE_INFO
+WHERE CURRENT_NUMERIC_VALUE IS NOT NULL
+ORDER BY SYSTEM_VALUE_NAME;
+```
+
+## システム監視のベストプラクティス
+
+### 1. リアルタイム監視
+
+```sql
+-- システムの健全性チェック
+SELECT 
+  CASE 
+    WHEN SYSTEM_ASP_USED > 90 THEN 'CRITICAL'
+    WHEN SYSTEM_ASP_USED > 80 THEN 'WARNING'
+    ELSE 'OK'
+  END AS ASP_STATUS,
+  SYSTEM_ASP_USED AS ASP_USED_PCT,
+  ELAPSED_CPU_USED AS CPU_USED_PCT,
+  ACTIVE_JOBS_IN_SYSTEM AS ACTIVE_JOBS,
+  BATCH_RUNNING AS BATCH_JOBS
+FROM QSYS2.SYSTEM_STATUS_INFO;
+```
+
+### 2. 容量計画
+
+```sql
+-- ストレージ使用状況の分析
+SELECT 
+  SYSTEM_ASP_STORAGE AS TOTAL_ASP_MB,
+  SYSTEM_ASP_STORAGE * SYSTEM_ASP_USED / 100 AS USED_ASP_MB,
+  SYSTEM_ASP_STORAGE * (100 - SYSTEM_ASP_USED) / 100 AS FREE_ASP_MB,
+  CURRENT_TEMPORARY_STORAGE AS TEMP_STORAGE_MB,
+  MAXIMUM_TEMPORARY_STORAGE_USED AS MAX_TEMP_USED_MB
+FROM QSYS2.SYSTEM_STATUS_INFO;
+```
+
+### 3. パフォーマンス分析
+
+```sql
+-- CPU とジョブのパフォーマンス
+SELECT 
+  ELAPSED_CPU_USED,
+  CONFIGURED_CPUS,
+  CURRENT_CPU_CAPACITY,
+  ACTIVE_JOBS_IN_SYSTEM,
+  DECIMAL(ACTIVE_JOBS_IN_SYSTEM, 10, 2) / CONFIGURED_CPUS AS JOBS_PER_CPU
+FROM QSYS2.SYSTEM_STATUS_INFO;
+```
+
+### 4. ジョブ・テーブル監視
+
+```sql
+-- ジョブ・テーブル・エントリーの使用状況
+SELECT 
+  TOTAL_JOB_TABLE_ENTRIES,
+  IN_USE_JOB_TABLE_ENTRIES,
+  AVAILABLE_JOB_TABLE_ENTRIES,
+  DECIMAL(IN_USE_JOB_TABLE_ENTRIES, 10, 2) / TOTAL_JOB_TABLE_ENTRIES * 100 AS USAGE_PCT,
+  ACTIVE_JOB_TABLE_ENTRIES,
+  JOBQ_JOB_TABLE_ENTRIES,
+  OUTQ_JOB_TABLE_ENTRIES
+FROM QSYS2.SYSTEM_STATUS_INFO;
+```
+
+### 5. メモリー・セグメント監視
+
+```sql
+-- メモリー・セグメントの使用状況
+SELECT 
+  TEMPORARY_256MB_SEGMENTS AS TEMP_256MB_PCT,
+  TEMPORARY_4GB_SEGMENTS AS TEMP_4GB_PCT,
+  PERMANENT_256MB_SEGMENTS AS PERM_256MB_PCT,
+  PERMANENT_4GB_SEGMENTS AS PERM_4GB_PCT,
+  CASE 
+    WHEN TEMPORARY_256MB_SEGMENTS > 90 OR TEMPORARY_4GB_SEGMENTS > 90 THEN 'WARNING'
+    ELSE 'OK'
+  END AS SEGMENT_STATUS
+FROM QSYS2.SYSTEM_STATUS_INFO;
+```
+
+## アラート設定の例
+
+### ASP 使用率アラート
+
+```sql
+-- ASP 使用率が 80% を超えた場合にアラート
+SELECT 
+  'ASP Usage Alert' AS ALERT_TYPE,
+  SYSTEM_ASP_USED AS CURRENT_USAGE,
+  SYSTEM_ASP_STORAGE AS TOTAL_CAPACITY,
+  CURRENT_TIMESTAMP AS ALERT_TIME
+FROM QSYS2.SYSTEM_STATUS_INFO
+WHERE SYSTEM_ASP_USED > 80;
+```
+
+### CPU 使用率アラート
+
+```sql
+-- CPU 使用率が 90% を超えた場合にアラート
+SELECT 
+  'CPU Usage Alert' AS ALERT_TYPE,
+  ELAPSED_CPU_USED AS CURRENT_USAGE,
+  CONFIGURED_CPUS AS TOTAL_CPUS,
+  ACTIVE_JOBS_IN_SYSTEM AS ACTIVE_JOBS,
+  CURRENT_TIMESTAMP AS ALERT_TIME
+FROM QSYS2.SYSTEM_STATUS_INFO
+WHERE ELAPSED_CPU_USED > 90;
+```
+
+### ジョブ・テーブル使用率アラート
+
+```sql
+-- ジョブ・テーブル使用率が 90% を超えた場合にアラート
+SELECT 
+  'Job Table Alert' AS ALERT_TYPE,
+  DECIMAL(IN_USE_JOB_TABLE_ENTRIES, 10, 2) / TOTAL_JOB_TABLE_ENTRIES * 100 AS USAGE_PCT,
+  IN_USE_JOB_TABLE_ENTRIES AS USED_ENTRIES,
+  TOTAL_JOB_TABLE_ENTRIES AS TOTAL_ENTRIES,
+  CURRENT_TIMESTAMP AS ALERT_TIME
+FROM QSYS2.SYSTEM_STATUS_INFO
+WHERE DECIMAL(IN_USE_JOB_TABLE_ENTRIES, 10, 2) / TOTAL_JOB_TABLE_ENTRIES * 100 > 90;
+```
+
+## 関連ビュー・関数
+
+- [`MEMORY_POOL_INFO`](ibmi-memory-pool.md) - メモリープール情報
+- [`ACTIVE_JOB_INFO`](ibmi-job-management-part1.md) - アクティブ・ジョブ情報
+- [`SYSLIMITS`](ibmi-system-health.md) - システム制限情報
