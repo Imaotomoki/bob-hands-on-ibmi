@@ -6,6 +6,38 @@
 
 IBM Bob の Code モードを使用して、IBM i Db2 のシステム監視やジョブ管理のための Notebook を効率的に作成する方法を学びます。
 
+## ディレクトリ構造
+
+```
+bob-hands-on-ibmi/
+├── README.md                    # このファイル
+├── .bob/                        # Bob の設定ディレクトリ
+│   └── rules/                   # Bob のカスタムルール
+│       └── ibmi-notebook-builder.md  # IBM i Notebook 作成専用ルール
+└── Docs/                        # IBM i サービスの参照資料
+    ├── ibmi-system-health.md    # システムヘルス監視（SYSLIMITS等）
+    ├── ibmi-job-management-part1.md  # ジョブ管理Part1（ACTIVE_JOB_INFO等）
+    ├── ibmi-job-management-part2.md  # ジョブ管理Part2（JOB_QUEUE_INFO等）
+    ├── ibmi-memory-pool.md      # メモリープール管理（MEMORY_POOL等）
+    ├── ibmi-locks-records.md    # ロック・レコード管理（OBJECT_LOCK_INFO等）
+    └── ibmi-system-status.md    # システム状況（SYSTEM_STATUS等）
+```
+
+### 各ディレクトリの役割
+
+#### `.bob/rules/`
+Bob の動作をカスタマイズするルールファイルを格納します。
+- **ibmi-notebook-builder.md**: IBM i Notebook 作成時の専門ガイドライン
+  - .inb ファイルの構造定義
+  - SQL の記述ルール
+  - グラフ化の方法
+  - IBM i Services の使用方法
+
+このルールにより、Bob は IBM i に特化した高品質な Notebook を自動生成できます。
+
+#### `Docs/`
+IBM i の各種サービス（ビュー・テーブル関数）の詳細な参照資料を格納します。
+Bob が Notebook を作成する際に、これらのドキュメントを参照して適切な SQL を生成します。
 
 ## 参照資料
 
