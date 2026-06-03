@@ -13,7 +13,16 @@ bob-hands-on-ibmi/
 ├── README.md                    # このファイル
 ├── .bob/                        # Bob の設定ディレクトリ
 │   └── rules/                   # Bob のカスタムルール
-│       └── ibmi-notebook-builder.md  # IBM i Notebook 作成専用ルール
+│       ├── ibmi-notebook-builder.md  # IBM i Notebook 作成専用ルール
+│       ├── 01-naming-conventions.md  # 命名規則（システム名・SQL名）
+│       ├── 02-data-types.md          # データ型の選択指針
+│       ├── 03-ddl-table-index.md     # テーブル・インデックス定義
+│       ├── 04-dml-select.md          # SELECT・DML の記述ルール
+│       ├── 05-transaction-isolation.md  # トランザクション分離レベル
+│       ├── 06-procedures-functions.md   # プロシージャー・関数の実装
+│       ├── 07-performance-optimization.md  # パフォーマンス最適化
+│       ├── 08-ibmi-specific.md       # IBM i 固有機能・注意点
+│       └── 09-comments-documentation.md  # コメント・ドキュメント規則
 └── Docs/                        # IBM i サービスの参照資料
     ├── ibmi-system-health.md    # システムヘルス監視（SYSLIMITS等）
     ├── ibmi-job-management-part1.md  # ジョブ管理Part1（ACTIVE_JOB_INFO等）
@@ -27,13 +36,24 @@ bob-hands-on-ibmi/
 
 #### `.bob/rules/`
 Bob の動作をカスタマイズするルールファイルを格納します。
+
 - **ibmi-notebook-builder.md**: IBM i Notebook 作成時の専門ガイドライン
   - .inb ファイルの構造定義
   - SQL の記述ルール
   - グラフ化の方法
   - IBM i Services の使用方法
 
-このルールにより、Bob は IBM i に特化した高品質な Notebook を自動生成できます。
+- **01-naming-conventions.md**: テーブル・カラムのシステム名（10文字以内）と SQL 名の命名ルール
+- **02-data-types.md**: DECIMAL / INTEGER / VARCHAR 等、用途別データ型の選択指針
+- **03-ddl-table-index.md**: CREATE TABLE / CREATE INDEX の記述規則
+- **04-dml-select.md**: SELECT・INSERT・UPDATE・DELETE の記述スタイル
+- **05-transaction-isolation.md**: コミットメント制御と分離レベルの使い分け
+- **06-procedures-functions.md**: ストアードプロシージャー・UDF の実装ガイドライン
+- **07-performance-optimization.md**: インデックス活用・実行計画の改善手法
+- **08-ibmi-specific.md**: IBM i 固有の機能（ジャーナル、*LIBL 等）と注意点
+- **09-comments-documentation.md**: ファイルヘッダー・インラインコメントの記述規則
+
+これらのルールにより、Bob は IBM i に特化した高品質な SQL・Notebook を自動生成できます。
 
 #### `Docs/`
 IBM i の各種サービス（ビュー・テーブル関数）の詳細な参照資料を格納します。
@@ -137,3 +157,5 @@ CPU使用率、メモリー使用率、ストレージ使用率をグラフで�
 
 ## 更新履歴
 
+- **2026-06-03**: IBM i SQL コーディングルール（01〜09）を `.bob/rules/` に追加
+- **初版**: IBM Bob ハンズオン資料、Docs/ ディレクトリおよび Notebook 作成ルール追加

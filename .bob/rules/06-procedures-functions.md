@@ -1,0 +1,163 @@
+# IBM i SQL ストアドプロシージャー・ユーザー定義関数（UDF）
+
+## ストアドプロシージャー（CREATE PROCEDURE）
+
+### 基本構造
+- プロシージャー名はスキーマ修飾で記述すること
+- パラメーターには `IN` / `OUT` / `INOUT` を必ず明示すること
+- `LANGUAGE SQL` を明示すること（外部プロシージャーの場合は `LANGUAGE RPGLE` 等）
+
+```sql
+CREATE OR REPLACE PROCEDURE MYLIB.UPDATE_ORDER_STATUS (
+    IN  P_ORDER_ID  INTEGER,
+    IN  P_STATUS    CHAR(1),
+    OUT P_RESULT    CHAR(1)   -- 'S': 成功, 'E': エラー
+)
+LANGUAGE SQL
+SPECIFIC MYLIB.UPD_ORD_STS
+MODIFIES SQL DATA
+NOT DETERMINISTIC
+CALLED ON NULL INPUT
+BEGIN
+    -- 変数宣言
+    DECLARE V_COUNT INTEGER DEFAULT 0;
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        SET P_RESULT = 'E';
+
+    -- 処理本体
+    UPDATE MYLIB.ORDERS
+    SET    STATUS     = P_STATUS,
+           UPDATED_AT = CURRENT_TIMESTAMP
+    WHERE  ORDER_ID   = P_ORDER_ID;
+
+    GET DIAGNOSTICS V_COUNT = ROW_COUNT;
+
+    IF V_COUNT = 0 THEN
+        SET P_RESULT = 'E';
+    ELSE
+        SET P_RESULT = 'S';
+        COMMIT;
+    END IF;
+END;
+```
+
+### プロシージャー記述ルール
+- `SPECIFIC` 名（固有名）を必ず指定すること（システム名10文字制限に注意）
+- データアクセスレベルを明示すること
+  - `READS SQL DATA`: SELECT のみ
+  - `MODIFIES SQL DATA`: INSERT/UPDATE/DELETE を含む
+  - `CONTAINS SQL`: データアクセスなし
+  - `NO SQL`: SQL を実行しない
+- 決定論的かどうかを明示すること: `DETERMINISTIC` / `NOT DETERMINISTIC`
+- NULL 入力時の動作を明示すること: `CALLED ON NULL INPUT` / `RETURNS NULL ON NULL INPUT`
+
+### 例外ハンドリング
+- `DECLARE ... HANDLER` で例外を必ず捕捉すること
+  ```sql
+  -- SQLEXCEPTIONハンドラー（必須）
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+      ROLLBACK;
+      -- エラーログへの記録等
+  END;
+
+  -- 特定のSQLSTATEをハンドリング
+  DECLARE CONTINUE HANDLER FOR SQLSTATE '02000'  -- NOT FOUND
+      SET V_FOUND = 0;
+  ```
+
+## ユーザー定義関数（UDF）
+
+### スカラー関数
+```sql
+CREATE OR REPLACE FUNCTION MYLIB.FORMAT_DATE (
+    P_DATE DATE
+)
+RETURNS VARCHAR(10)
+LANGUAGE SQL
+SPECIFIC MYLIB.FMT_DATE
+DETERMINISTIC
+NO EXTERNAL ACTION
+READS SQL DATA
+BEGIN
+    RETURN VARCHAR_FORMAT(P_DATE, 'YYYY/MM/DD');
+END;
+```
+
+### テーブル関数
+```sql
+CREATE OR REPLACE FUNCTION MYLIB.GET_ORDER_LINES (
+    P_ORDER_ID INTEGER
+)
+RETURNS TABLE (
+    LINE_NO    SMALLINT,
+    ITEM_CODE  CHAR(10),
+    QUANTITY   DECIMAL(9, 2),
+    UNIT_PRICE DECIMAL(15, 2)
+)
+LANGUAGE SQL
+SPECIFIC MYLIB.GET_ORD_LN
+READS SQL DATA
+NOT DETERMINISTIC
+BEGIN
+    RETURN
+        SELECT LINE_NO, ITEM_CODE, QUANTITY, UNIT_PRICE
+        FROM MYLIB.ORDER_LINES
+        WHERE ORDER_ID = P_ORDER_ID
+        ORDER BY LINE_NO;
+END;
+```
+
+テーブル関数の呼び出しは `TABLE()` 句を使用すること
+```sql
+SELECT * FROM TABLE(MYLIB.GET_ORDER_LINES(12345)) AS L;
+```
+
+## 変数・カーソル
+
+### 変数宣言
+- ローカル変数は `DECLARE` で先頭にまとめて宣言すること
+- 変数名は `V_` プレフィックスを付けること（パラメーターは `P_` プレフィックス）
+
+### カーソル処理
+- カーソルを使用する場合は `FOR UPDATE OF` が必要かを検討すること
+- カーソルは `OPEN` → `FETCH LOOP` → `CLOSE` のパターンを遵守すること
+  ```sql
+  DECLARE C_ORDERS CURSOR FOR
+      SELECT ORDER_ID, STATUS
+      FROM MYLIB.ORDERS
+      WHERE STATUS = 'N'
+      FOR UPDATE OF STATUS;
+
+  DECLARE CONTINUE HANDLER FOR NOT FOUND
+      SET V_EOF = 1;
+
+  OPEN C_ORDERS;
+  FETCH C_ORDERS INTO V_ORDER_ID, V_STATUS;
+
+  WHILE V_EOF = 0 DO
+      -- 処理
+      FETCH C_ORDERS INTO V_ORDER_ID, V_STATUS;
+  END WHILE;
+
+  CLOSE C_ORDERS;
+  ```
+- セットベースの操作で代替できる場合はカーソルを **使用しないこと**（パフォーマンス上の理由）
+
+## トリガー（CREATE TRIGGER）
+
+```sql
+CREATE OR REPLACE TRIGGER MYLIB.ORDERS_BEFORE_UPDATE
+    BEFORE UPDATE ON MYLIB.ORDERS
+    REFERENCING OLD AS O NEW AS N
+    FOR EACH ROW MODE DB2ROW
+BEGIN ATOMIC
+    SET N.UPDATED_AT = CURRENT_TIMESTAMP;
+END;
+```
+
+- トリガー名はイベント・タイミングが分かるよう命名すること
+  - 例: `<TABLE>_BEFORE_INSERT`, `<TABLE>_AFTER_UPDATE`
+- `FOR EACH ROW` / `FOR EACH STATEMENT` を明示すること
+- `MODE DB2ROW` を標準とすること（IBM i 固有）
+- トリガー内での COMMIT/ROLLBACK は **禁止**（呼び出し元のトランザクションに依存する）
